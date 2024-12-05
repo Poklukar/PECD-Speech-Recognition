@@ -38,8 +38,8 @@ class AudioRecordingService : Service() {
 
         // MFCC parameters
         private const val NUM_MFCC = 13
-        private const val NUM_FILTERS = 26
-        private const val FFT_SIZE = 2048
+        // private const val NUM_FILTERS = 26
+        // private const val FFT_SIZE = 2048
 
         // Notifications
         private const val CHANNEL_ID = "word_recognition"
@@ -55,7 +55,7 @@ class AudioRecordingService : Service() {
 
     private var audioRecord: AudioRecord? = null
     private var audioRecordingThread: Thread? = null
-    private var recognitionThread: Thread? = null
+    // private var recognitionThread: Thread? = null
 
     var isRecording: Boolean = false
     var recordingBuffer: DoubleArray = DoubleArray(RECORDING_LENGTH)
@@ -117,17 +117,13 @@ class AudioRecordingService : Service() {
     }
 
     private fun createNotificationChannel() {
-        if(Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
-            return
-        } else {
-            val channel = NotificationChannel(CHANNEL_ID, getString(R.string.channel_name), NotificationManager.IMPORTANCE_HIGH)
-            channel.description = getString(R.string.channel_desc)
-            channel.enableLights(true)
-            channel.lightColor = Color.BLUE
-            channel.enableVibration(true)
-            val notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
-            notificationManager.createNotificationChannel(channel)
-        }
+        val channel = NotificationChannel(CHANNEL_ID, getString(R.string.channel_name), NotificationManager.IMPORTANCE_HIGH)
+        channel.description = getString(R.string.channel_desc)
+        channel.enableLights(true)
+        channel.lightColor = Color.BLUE
+        channel.enableVibration(true)
+        val notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
+        notificationManager.createNotificationChannel(channel)
     }
 
     private fun createNotification(): Notification {
@@ -186,13 +182,11 @@ class AudioRecordingService : Service() {
             return
         }
         isRecording = true
-        audioRecordingThread = Thread(
-            Runnable {
-                run {
-                    record()
-                }
+        audioRecordingThread = Thread {
+            run {
+                record()
             }
-        )
+        }
         audioRecordingThread?.start()
     }
 
@@ -215,7 +209,7 @@ class AudioRecordingService : Service() {
         var totalSamplesRead: Int
 
         while (isRecording) {
-            var tempRecordingBuffer = DoubleArray(SAMPLE_RATE - windowSize)
+            val tempRecordingBuffer = DoubleArray(SAMPLE_RATE - windowSize)
 
             if (!firstLoop) {
                 totalSamplesRead = SAMPLE_RATE - windowSize
@@ -305,7 +299,7 @@ class AudioRecordingService : Service() {
         val probabilityProcessor: TensorProcessor = TensorProcessor.Builder().build()
         if (axisLabels != null) {
             val labels = TensorLabel(axisLabels, probabilityProcessor.process(outputTensorBuffer)).mapWithFloatValue
-            var results = ArrayList<Result>()
+            val results = ArrayList<Result>()
             for (label in labels) {
                 results.add(Result(label.key, label.value.toDouble()))
             }
