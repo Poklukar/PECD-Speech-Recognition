@@ -33,7 +33,7 @@ class HomeFragment : Fragment(), RecordingCallback {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        sharedPreferences = PreferenceManager.getDefaultSharedPreferences(activity)
+        sharedPreferences = activity?.let { PreferenceManager.getDefaultSharedPreferences(it) }
     }
 
     override fun onCreateView(
