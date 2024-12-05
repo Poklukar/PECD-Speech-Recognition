@@ -8,13 +8,11 @@ import android.graphics.Color
 import android.media.*
 import android.os.Binder
 import android.os.Build
-import android.os.Environment
 import android.os.IBinder
 import android.util.Log
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
-import com.konovalov.vad.models.VadModel
 import java.util.*
 import org.tensorflow.lite.Interpreter
 import org.tensorflow.lite.support.common.FileUtil
@@ -214,7 +212,7 @@ class AudioRecordingService : Service() {
         Log.v(TAG, "Start recording")
 
         var firstLoop = true
-        var totalSamplesRead = 0
+        var totalSamplesRead: Int
 
         while (isRecording) {
             var tempRecordingBuffer = DoubleArray(SAMPLE_RATE - windowSize)
