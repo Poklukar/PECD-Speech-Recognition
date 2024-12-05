@@ -1,25 +1,18 @@
 package com.example.speechrecognitionapp
 
 import android.Manifest
-import android.content.ComponentName
-import android.content.Intent
-import android.content.ServiceConnection
 import android.content.pm.PackageManager
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
-import android.os.IBinder
 import android.util.Log
 import android.view.Menu
 import android.view.MenuInflater
 import android.view.MenuItem
 import android.view.View
-import android.widget.ListView
 import android.widget.Toast
-import android.widget.Toolbar
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.navigation.findNavController
-import androidx.navigation.ui.AppBarConfiguration
 import androidx.navigation.ui.setupActionBarWithNavController
 import com.example.speechrecognitionapp.databinding.ActivityMainBinding
 
@@ -27,18 +20,11 @@ class MainActivity : AppCompatActivity()/*, RecordingCallback*/ {
 
     private lateinit var binding: ActivityMainBinding
 
-//    private var results = ArrayList<Result>()
-//    private lateinit var adapter: ResultAdapter
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
         val view: View = binding.root
-//        val listView: ListView = binding.listView
         setContentView(view)
-
-//        adapter = ResultAdapter(results, applicationContext)
-//        listView.adapter = adapter
 
         if(ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED || ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED || ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED){
             ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.RECORD_AUDIO, Manifest.permission.READ_EXTERNAL_STORAGE, Manifest.permission.POST_NOTIFICATIONS), 1)
@@ -73,15 +59,6 @@ class MainActivity : AppCompatActivity()/*, RecordingCallback*/ {
         }
         return super.onOptionsItemSelected(item)
     }
-
-//    override fun onDataUpdated(data: ArrayList<Result>) {
-//        Log.d(TAG, "Updated:" + data.size)
-//        runOnUiThread {
-//            adapter.clear()
-//            adapter.addAll(data)
-//            adapter.notifyDataSetChanged()
-//        }
-//    }
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)

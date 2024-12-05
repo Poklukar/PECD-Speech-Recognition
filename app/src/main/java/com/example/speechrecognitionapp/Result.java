@@ -1,9 +1,5 @@
 package com.example.speechrecognitionapp;
 
-import android.os.Parcelable;
-
-import java.io.Serializable;
-
 public class Result {
     private String label;
     private Double confidence;

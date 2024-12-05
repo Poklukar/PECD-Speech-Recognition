@@ -4,7 +4,6 @@ import android.content.ComponentName
 import android.content.Intent
 import android.content.ServiceConnection
 import android.content.SharedPreferences
-import android.content.pm.PackageManager
 import android.os.Bundle
 import android.os.IBinder
 import android.util.Log
@@ -12,11 +11,8 @@ import androidx.fragment.app.Fragment
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
-import androidx.navigation.fragment.findNavController
 import androidx.preference.PreferenceManager
-import com.example.speechrecognitionapp.databinding.ActivityMainBinding
 import com.example.speechrecognitionapp.databinding.FragmentHomeBinding
 
 class HomeFragment : Fragment(), RecordingCallback {
@@ -39,9 +35,9 @@ class HomeFragment : Fragment(), RecordingCallback {
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?,
         savedInstanceState: Bundle?
-    ): View? {
+    ): View {
         binding = FragmentHomeBinding.inflate(inflater)
-        var view = binding.root
+        val view = binding.root
 
         val listView = binding.listView
         adapter = ResultAdapter(results, activity?.applicationContext)
@@ -115,13 +111,13 @@ class HomeFragment : Fragment(), RecordingCallback {
         val serviceIntent = Intent(activity, AudioRecordingService::class.java)
 
         try {
-            var energyThreshold = sharedPreferences?.getString("energy", "0.1")
+            val energyThreshold = sharedPreferences?.getString("energy", "0.1")
             //Log.d(TAG, "energyThreshold: $energyThreshold")
-            var probabilityThreshold = sharedPreferences?.getString("probability", "0.002")
+            val probabilityThreshold = sharedPreferences?.getString("probability", "0.002")
             //Log.d(TAG, "probabilityThreshold: $probabilityThreshold")
-            var windowSize = sharedPreferences?.getString("window_size", "8000")
+            val windowSize = sharedPreferences?.getString("window_size", "8000")
             //Log.d(TAG, "windowSize: $windowSize")
-            var topK = sharedPreferences?.getString("top_k", "1")
+            val topK = sharedPreferences?.getString("top_k", "1")
 
             serviceIntent.putExtras(Bundle().apply {
                 putDouble("energyThreshold", energyThreshold?.toDouble()!!)
