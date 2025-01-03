@@ -1,13 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     tools:context=".HomeFragment">
 
-    <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
-        xmlns:app="http://schemas.android.com/apk/res-auto"
-        xmlns:tools="http://schemas.android.com/tools"
+    <RelativeLayout
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:orientation="vertical"
@@ -21,7 +20,9 @@
             android:layout_above="@+id/btnRecord"
             android:divider="@android:color/darker_gray"
             android:dividerHeight="1dp"
-            />
+            >
+
+        </ListView>
 
 
         <Button
@@ -37,6 +38,20 @@
             android:layout_marginTop="16dp"
             android:drawableLeft="@drawable/baseline_mic_24"
             android:text="Record"/>
+
+        <TextView
+            android:id="@+id/soundIntensity"
+            android:layout_width="97dp"
+            android:layout_height="47dp"
+            android:layout_alignParentBottom="true"
+            android:layout_marginStart="16dp"
+            android:layout_marginTop="16dp"
+            android:layout_marginBottom="16dp"
+            android:backgroundTint="@color/blue_lovely"
+            android:text="dB"
+            android:textAlignment="center"
+            android:textColor="@android:color/darker_gray"
+            android:textSize="20sp" />
 
     </RelativeLayout>
 

@@ -11,6 +11,7 @@ import androidx.fragment.app.Fragment
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.preference.PreferenceManager
 import com.example.speechrecognitionapp.databinding.FragmentHomeBinding
@@ -66,6 +67,20 @@ class HomeFragment : Fragment(), RecordingCallback {
             adapter.clear()
             adapter.addAll(data)
             adapter.notifyDataSetChanged()
+        }
+    }
+
+    override fun onDataClear() {
+        Log.d(TAG, "Cleared")
+        activity?.runOnUiThread {
+            adapter.clear()
+            adapter.notifyDataSetChanged()
+        }
+    }
+
+    override fun updateSoundIntensity(dB: Double) {
+        activity?.runOnUiThread {
+            binding.soundIntensity.text = String.format("%.2f dB", dB)
         }
     }
 

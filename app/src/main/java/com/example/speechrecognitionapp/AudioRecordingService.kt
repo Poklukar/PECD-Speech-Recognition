@@ -9,9 +9,14 @@ import android.media.*
 import android.os.Binder
 import android.os.IBinder
 import android.util.Log
+import android.widget.TextView
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
+import com.google.firebase.database.FirebaseDatabase
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import java.util.*
 import org.tensorflow.lite.Interpreter
 import org.tensorflow.lite.support.common.FileUtil
@@ -50,11 +55,12 @@ class AudioRecordingService : Service() {
     private var windowSize = SAMPLE_RATE / 2
     private var topK = 3
 
+    private var firebaseUrl = "firebase url"
+
     private var recordingBufferSize = 0
 
     private var audioRecord: AudioRecord? = null
     private var audioRecordingThread: Thread? = null
-    // private var recognitionThread: Thread? = null
 
     var isRecording: Boolean = false
     var recordingBuffer: DoubleArray = DoubleArray(RECORDING_LENGTH)
@@ -173,25 +179,24 @@ class AudioRecordingService : Service() {
         }
 
         callback?.onDataUpdated(data)
+        writeToFirebase(data)
     }
 
     private fun startRecording() {
-        if(ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED){
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
             // Access denied
             return
         }
         isRecording = true
-        audioRecordingThread = Thread {
-            run {
-                record()
-            }
+        // Launching a coroutine in the background
+        CoroutineScope(Dispatchers.IO).launch {
+            record()
         }
-        audioRecordingThread?.start()
-    }
+}
 
     private fun record() {
         android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_AUDIO)
-        if(ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED){
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
             // Access denied
             return
         }
@@ -206,17 +211,16 @@ class AudioRecordingService : Service() {
 
         var firstLoop = true
         var totalSamplesRead: Int
+        val tempRecordingBuffer = DoubleArray(SAMPLE_RATE - windowSize)
 
         while (isRecording) {
-            val tempRecordingBuffer = DoubleArray(SAMPLE_RATE - windowSize)
-
             if (!firstLoop) {
                 totalSamplesRead = SAMPLE_RATE - windowSize
-
             } else {
                 totalSamplesRead = 0
                 firstLoop = false
             }
+
             while (totalSamplesRead < SAMPLE_RATE) {
                 val remainingSamples = SAMPLE_RATE - totalSamplesRead
                 val samplesToRead = if (remainingSamples > recordingBufferSize) recordingBufferSize else remainingSamples
@@ -224,25 +228,65 @@ class AudioRecordingService : Service() {
                 val read = audioRecord?.read(audioBuffer, 0, samplesToRead)
 
                 if (read != AudioRecord.ERROR_INVALID_OPERATION && read != AudioRecord.ERROR_BAD_VALUE) {
-                    for (i in 0 until read!!){
+                    for (i in 0 until read!!) {
                         recordingBuffer[totalSamplesRead + i] = audioBuffer[i].toDouble() / Short.MAX_VALUE
                     }
                     totalSamplesRead += read
                 }
-
-
             }
 
-            computeBuffer(recordingBuffer)
 
+            val rms = calculateRMS(recordingBuffer)
+            val dB = 20 * Math.log10(rms)
+
+            // Update the dB value in HomeFragment
+            callback?.updateSoundIntensity(dB)
+
+            Log.d(TAG, dB.toString())
+            if (dB > -30) {
+                computeBuffer(recordingBuffer)
+            } else {
+                callback?.onDataClear()
+            }
+
+            Thread.sleep(50)
+
+            // Use a circular buffer to avoid frequent array copying - less power consumption
             System.arraycopy(recordingBuffer, windowSize, tempRecordingBuffer, 0, recordingBuffer.size - windowSize)
             recordingBuffer = DoubleArray(RECORDING_LENGTH)
-
             System.arraycopy(tempRecordingBuffer, 0, recordingBuffer, 0, tempRecordingBuffer.size)
-
         }
         stopRecording()
     }
+
+    private fun calculateRMS(buffer: DoubleArray): Double {
+        var sum = 0.0
+        for (sample in buffer) {
+            sum += sample * sample
+        }
+        return Math.sqrt(sum / buffer.size)
+    }
+
+    private fun writeToFirebase(topKData: ArrayList<Result>) {
+        val database = FirebaseDatabase.getInstance(firebaseUrl)
+        val ref = database.getReference("topKResults")
+
+        val dataToWrite = topKData.map { result ->
+            mapOf(
+               "label" to result.label,
+               "confidence" to String.format("%.3f", result.confidence).toDouble()
+            )
+        }
+
+        ref.push().setValue(dataToWrite)
+            .addOnSuccessListener {
+                Log.d("Firebase", "Top K data successfully written to Firebase")
+            }
+            .addOnFailureListener { e ->
+                Log.e("Firebase", "Failed to write top K data to Firebase", e)
+            }
+    }
+
 
     private fun computeBuffer(audioBuffer: DoubleArray) {
         val mfccConvert = MFCC()
@@ -309,17 +353,25 @@ class AudioRecordingService : Service() {
                 Log.d(TAG, "Result: $result")
                 Log.d(TAG, "Result: ${labels.maxBy { it.value }}")
 
-                updateData(results)
-
-                notification = createNotification()
-                updateNotification(result!!)
-
+                if (value > 0.5) {
+                    //if the prediction is high, pause for some time, so no false further predictions will be made
+                    updateData(results)
+                    notification = createNotification()
+                    updateNotification(result!!)
+                    Thread.sleep(500)
+                } else {
+                    //if the prediction is too low, discard it
+                    val noWordResult = Result(" ¯\\_(ツ)_/¯", 0.0)
+                    results.clear()
+                    results.add(noWordResult)
+                    updateData(results)
+                }
             }
 
 
         }
     }
-    
+
     fun foreground() {
         notification = createNotification()
         startForeground(NOTIFICATION_ID, notification)
@@ -333,6 +385,7 @@ class AudioRecordingService : Service() {
 
     private fun stopRecording() {
         isRecording = false
+        callback?.updateSoundIntensity(0.0)
     }
 
     override fun onDestroy() {
