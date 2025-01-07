@@ -24,6 +24,7 @@ import org.tensorflow.lite.support.common.TensorProcessor
 import org.tensorflow.lite.support.label.TensorLabel
 import org.tensorflow.lite.support.tensorbuffer.TensorBuffer
 import kotlin.collections.ArrayList
+import java.text.SimpleDateFormat
 
 
 class AudioRecordingService : Service() {
@@ -179,7 +180,12 @@ class AudioRecordingService : Service() {
         }
 
         callback?.onDataUpdated(data)
-        writeToFirebase(data)
+        if (data.isNotEmpty() && data[0].confidence != 0.0) {
+            callback?.onDataUpdated(data)
+            writeToFirebase(data)
+        } else {
+            Log.d(TAG, "Top result's confidence is 0, not writing to Firebase")
+        }
     }
 
     private fun startRecording() {
@@ -243,13 +249,20 @@ class AudioRecordingService : Service() {
             callback?.updateSoundIntensity(dB)
 
             Log.d(TAG, dB.toString())
-            if (dB > -30) {
+            if (dB > -40) {
                 computeBuffer(recordingBuffer)
+                // extra sleep before recording the next window
+                Thread.sleep(20)
             } else {
                 callback?.onDataClear()
+                // if the sound intensity is too low, stop recording for a while - if stop for longer period it doesn't hear the next word
+                audioRecord?.stop()
+                Thread.sleep(10)
+                audioRecord?.startRecording()
             }
 
-            Thread.sleep(50)
+            // sleep between each window
+            Thread.sleep(30)
 
             // Use a circular buffer to avoid frequent array copying - less power consumption
             System.arraycopy(recordingBuffer, windowSize, tempRecordingBuffer, 0, recordingBuffer.size - windowSize)
@@ -270,21 +283,23 @@ class AudioRecordingService : Service() {
     private fun writeToFirebase(topKData: ArrayList<Result>) {
         val database = FirebaseDatabase.getInstance(firebaseUrl)
         val ref = database.getReference("topKResults")
+        val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
 
-        val dataToWrite = topKData.map { result ->
-            mapOf(
-               "label" to result.label,
-               "confidence" to String.format("%.3f", result.confidence).toDouble()
+        topKData.forEach { result ->
+            val dataToWrite = mapOf(
+                "label" to result.label,
+                "confidence" to String.format("%.3f", result.confidence).toDouble(),
+                "timestamp" to dateFormat.format(Date())
             )
-        }
 
-        ref.push().setValue(dataToWrite)
-            .addOnSuccessListener {
-                Log.d("Firebase", "Top K data successfully written to Firebase")
-            }
-            .addOnFailureListener { e ->
-                Log.e("Firebase", "Failed to write top K data to Firebase", e)
-            }
+            ref.push().setValue(dataToWrite)
+                .addOnSuccessListener {
+                    Log.d("Firebase", "Top K data successfully written to Firebase")
+                }
+                .addOnFailureListener { e ->
+                    Log.e("Firebase", "Failed to write top K data to Firebase", e)
+                }
+        }
     }
 
 
