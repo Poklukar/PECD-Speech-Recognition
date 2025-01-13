@@ -1,5 +1,4 @@
 package com.example.speechrecognitionapp
-
 import android.content.ComponentName
 import android.content.Intent
 import android.content.ServiceConnection
@@ -11,14 +10,13 @@ import androidx.fragment.app.Fragment
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.preference.PreferenceManager
 import com.example.speechrecognitionapp.databinding.FragmentHomeBinding
 
 class HomeFragment : Fragment(), RecordingCallback {
 
-    private var audioRecordingService: AudioRecordingService? = null
+    private var audioRecordingService: AudioRecordingServiceInterface? = null
     private var isServiceBound: Boolean = false
     private lateinit var binding: FragmentHomeBinding
 
@@ -87,8 +85,24 @@ class HomeFragment : Fragment(), RecordingCallback {
     private val serviceConnection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
             Log.d(TAG, "Service connected")
-            val binder = service as AudioRecordingService.RunServiceBinder
-            audioRecordingService = binder.service
+            when (service) {
+                is AudioRecordingServiceSilero.RunServiceBinder -> {
+                    audioRecordingService = service.service
+                }
+
+                is AudioRecordingServiceWebRTC.RunServiceBinder -> {
+                    audioRecordingService = service.service
+                }
+
+                is AudioRecordingServiceYamnet.RunServiceBinder -> {
+                    audioRecordingService = service.service
+                }
+
+                else -> {
+                    Log.e(TAG, "Unknown service binder type")
+                    return
+                }
+            }
             audioRecordingService?.setCallback(this@HomeFragment)
             isServiceBound = true
             audioRecordingService?.background()
@@ -123,7 +137,18 @@ class HomeFragment : Fragment(), RecordingCallback {
     }
 
     private fun startService() {
-        val serviceIntent = Intent(activity, AudioRecordingService::class.java)
+        // Get the selected service type from shared preferences
+        val serviceType = sharedPreferences?.getString("service_type", "yamnet")
+
+        // Determine the service class to use
+        val serviceClass = when (serviceType) {
+            "webrtc" -> AudioRecordingServiceWebRTC::class.java
+            "silero" -> AudioRecordingServiceSilero::class.java
+            else -> AudioRecordingServiceYamnet::class.java
+        }
+
+        val serviceIntent = Intent(activity, serviceClass)
+        Log.d(TAG, "Using service: $serviceType")
 
         try {
             val energyThreshold = sharedPreferences?.getString("energy", "0.1")
@@ -145,17 +170,23 @@ class HomeFragment : Fragment(), RecordingCallback {
         }
 
         activity?.startService(serviceIntent)
-        bindService()
+        bindService(serviceClass)
     }
 
     private fun stopService() {
         unbindService()
-        val serviceIntent = Intent(activity, AudioRecordingService::class.java)
+        val serviceType = sharedPreferences?.getString("service_type", "yamnet")
+        val serviceClass = when (serviceType) {
+            "webrtc" -> AudioRecordingServiceWebRTC::class.java
+            "silero" -> AudioRecordingServiceSilero::class.java
+            else -> AudioRecordingServiceYamnet::class.java
+        }
+        val serviceIntent = Intent(activity, serviceClass)
         activity?.stopService(serviceIntent)
     }
 
-    private fun bindService() {
-        val bindIntent = Intent(activity, AudioRecordingService::class.java)
+    private fun bindService(serviceClass: Class<*>) {
+        val bindIntent = Intent(activity, serviceClass)
         activity?.bindService(bindIntent, serviceConnection, AppCompatActivity.BIND_AUTO_CREATE)
     }
 
