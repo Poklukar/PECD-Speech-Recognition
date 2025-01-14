@@ -188,7 +188,12 @@ class AudioRecordingServiceYamnet: Service(), AudioRecordingServiceInterface {
         }
 
         callback?.onDataUpdated(data)
-        writeToFirebase(data)
+        if (data.isNotEmpty() && data[0].confidence != 0.0) {
+            callback?.onDataUpdated(data)
+            writeToFirebase(data)
+        } else {
+            Log.d(TAG, "Top result's confidence is 0, not writing to Firebase")
+        }
     }
 
     override fun startRecording() {
@@ -258,6 +263,7 @@ class AudioRecordingServiceYamnet: Service(), AudioRecordingServiceInterface {
 
             val rms = calculateRMS(recordingBuffer)
             val dB = 20 * log10(rms)
+            Log.e("DECIBELS TESTING", "$dB")
 
             // Update the dB value in HomeFragment
             callback?.updateSoundIntensity(dB)
@@ -284,9 +290,13 @@ class AudioRecordingServiceYamnet: Service(), AudioRecordingServiceInterface {
 
             } else {
                 callback?.onDataClear()
+                // if the sound intensity is too low, stop recording for a while - if stop for longer period it doesn't hear the next word
+                audioRecord?.stop()
+                Thread.sleep(10)
+                audioRecord?.startRecording()
             }
 
-            Thread.sleep(50)
+            Thread.sleep(30)
 
             // Use a circular buffer to avoid frequent array copying - less power consumption
             System.arraycopy(recordingBuffer, windowSize, tempRecordingBuffer, 0, recordingBuffer.size - windowSize)
@@ -339,10 +349,10 @@ class AudioRecordingServiceYamnet: Service(), AudioRecordingServiceInterface {
 
         ref.push().setValue(dataToWrite)
             .addOnSuccessListener {
-                Log.d(TAG, "Word count successfully written to Firebase")
+                Log.d("Firebase", "Word count successfully written to Firebase")
             }
             .addOnFailureListener { e ->
-                Log.e(TAG, "Failed to write word count to Firebase", e)
+                Log.e("Firebase", "Failed to write word count to Firebase", e)
             }
     }
 
@@ -405,11 +415,9 @@ class AudioRecordingServiceYamnet: Service(), AudioRecordingServiceInterface {
             for (label in labels) {
                 results.add(Result(label.key, label.value.toDouble()))
             }
-            Log.d(TAG, "Labels are: $labels")
             val result = labels.maxBy { it.value }.key
             val value = labels.maxBy { it.value }.value
             if (value!! > probabilityThreshold) {
-                Log.d(TAG, "Result: $result")
                 Log.d(TAG, "Result: ${labels.maxBy { it.value }}")
 
                 if (value > 0.5) {

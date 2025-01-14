@@ -137,6 +137,7 @@ class HomeFragment : Fragment(), RecordingCallback {
     }
 
     private fun startService() {
+        sharedPreferences?.edit()?.putBoolean("is_recording", true)?.apply()
         // Get the selected service type from shared preferences
         val serviceType = sharedPreferences?.getString("service_type", "yamnet")
 
@@ -170,10 +171,12 @@ class HomeFragment : Fragment(), RecordingCallback {
         }
 
         activity?.startService(serviceIntent)
+
         bindService(serviceClass)
     }
 
     private fun stopService() {
+        sharedPreferences?.edit()?.putBoolean("is_recording", false)?.apply()
         unbindService()
         val serviceType = sharedPreferences?.getString("service_type", "yamnet")
         val serviceClass = when (serviceType) {
