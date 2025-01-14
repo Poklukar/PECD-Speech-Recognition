@@ -259,7 +259,7 @@ class AudioRecordingServiceWebRTC : Service(), AudioRecordingServiceInterface {
             callback?.updateSoundIntensity(dB)
 
             Log.d(TAG, dB.toString())
-            if (dB > -50) {
+            if (dB > -45) {
                 val shortBuffer = ShortArray(recordingBuffer.size)
                 for (i in recordingBuffer.indices) {
                     shortBuffer[i] = (recordingBuffer[i] * Short.MAX_VALUE).toInt().toShort()
