@@ -14,6 +14,7 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.navigation.findNavController
 import androidx.navigation.ui.setupActionBarWithNavController
+import androidx.preference.PreferenceManager
 import com.example.speechrecognitionapp.databinding.ActivityMainBinding
 
 class MainActivity : AppCompatActivity()/*, RecordingCallback*/ {
@@ -49,16 +50,26 @@ class MainActivity : AppCompatActivity()/*, RecordingCallback*/ {
     }
 
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
-        when (item.itemId){
+        when (item.itemId) {
             R.id.nav_home -> {
                 findNavController(R.id.fragmentContainerView).navigate(R.id.action_settingsFragment_to_homeFragment)
             }
             R.id.nav_settings -> {
-                findNavController(R.id.fragmentContainerView).navigate(R.id.action_homeFragment_to_settingsFragment)
+                val sharedPreferences = PreferenceManager.getDefaultSharedPreferences(this)
+                val isRecording = sharedPreferences.getBoolean("is_recording", false)
+
+                if (isRecording) {
+                    // Show a toast and prevent navigation
+                    Toast.makeText(this, "Stop the recording before accessing settings.", Toast.LENGTH_SHORT).show()
+                } else {
+                    // Allow navigation to SettingsFragment
+                    findNavController(R.id.fragmentContainerView).navigate(R.id.action_homeFragment_to_settingsFragment)
+                }
             }
         }
         return super.onOptionsItemSelected(item)
     }
+
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)

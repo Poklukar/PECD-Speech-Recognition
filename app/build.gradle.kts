@@ -1,6 +1,7 @@
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
+    id("com.google.gms.google-services")
 }
 
 android {
@@ -21,8 +22,8 @@ android {
         release {
             isMinifyEnabled = false
             proguardFiles(
-                    getDefaultProguardFile("proguard-android-optimize.txt"),
-                    "proguard-rules.pro"
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
             )
         }
     }
@@ -48,15 +49,18 @@ dependencies {
     implementation("com.google.android.material:material:1.12.0")
     implementation("androidx.constraintlayout:constraintlayout:2.2.0")
     implementation("com.microsoft.onnxruntime:onnxruntime-android:1.15.0")
-    implementation("com.github.gkonovalov:android-vad:2.0.2")
     implementation("org.tensorflow:tensorflow-lite:2.10.0")
     implementation("org.tensorflow:tensorflow-lite-support:0.4.3")
 
     implementation("androidx.preference:preference-ktx:1.2.1")
     implementation("androidx.navigation:navigation-fragment-ktx:2.8.4")
     implementation("androidx.navigation:navigation-ui-ktx:2.8.4")
+    implementation("com.google.firebase:firebase-database:21.0.0")
 
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.1.3")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.4.0")
+    implementation("com.github.gkonovalov.android-vad:webrtc:2.0.3")
+    implementation("com.github.gkonovalov.android-vad:yamnet:2.0.3")
+    implementation("com.github.gkonovalov.android-vad:silero:2.0.3")
 }

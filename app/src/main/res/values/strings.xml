@@ -20,4 +20,16 @@
     <string name="top_k_summary">Number of top predictions to display</string>
     <string name="top_k_dialog">Select number of top predictions to display</string>
 
+    <string-array name="service_type_entries">
+        <item>Silero</item>
+        <item>WebRTC</item>
+        <item>Yamnet</item>
+    </string-array>
+
+    <string-array name="service_type_values">
+        <item>silero</item>
+        <item>webrtc</item>
+        <item>yamnet</item>
+    </string-array>
+
 </resources>

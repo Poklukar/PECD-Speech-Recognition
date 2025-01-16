@@ -1,6 +1,7 @@
 package com.example.speechrecognitionapp
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.app.*
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -8,8 +9,8 @@ import android.graphics.Color
 import android.media.*
 import android.os.Binder
 import android.os.IBinder
+import android.os.Process
 import android.util.Log
-import android.widget.TextView
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
@@ -23,14 +24,17 @@ import org.tensorflow.lite.support.common.FileUtil
 import org.tensorflow.lite.support.common.TensorProcessor
 import org.tensorflow.lite.support.label.TensorLabel
 import org.tensorflow.lite.support.tensorbuffer.TensorBuffer
-import kotlin.collections.ArrayList
+import com.konovalov.vad.webrtc.VadWebRTC
+import com.konovalov.vad.webrtc.config.FrameSize
+import com.konovalov.vad.webrtc.config.Mode
+import com.konovalov.vad.webrtc.config.SampleRate
 import java.text.SimpleDateFormat
+import kotlin.math.log10
 
-
-class AudioRecordingService : Service() {
+class AudioRecordingServiceWebRTC : Service(), AudioRecordingServiceInterface {
 
     companion object {
-        private val TAG = AudioRecordingService::class.simpleName
+        private val TAG = AudioRecordingServiceWebRTC::class.simpleName
 
         private const val SAMPLE_RATE = 16000
         private const val AUDIO_CHANNELS = AudioFormat.CHANNEL_IN_MONO
@@ -51,19 +55,19 @@ class AudioRecordingService : Service() {
         private const val NOTIFICATION_ID = 202
     }
     // Tweak parameters
-    private var energyThreshold = 0.1
-    private var probabilityThreshold = 0.002f
-    private var windowSize = SAMPLE_RATE / 2
-    private var topK = 3
+    override var energyThreshold = 0.1
+    override var probabilityThreshold = 0.002f
+    override var windowSize = SAMPLE_RATE / 2
+    override var topK = 3
 
-    private var firebaseUrl = "firebase url"
+    private var firebaseUrl = "https://speechrecognitionapp-a01d9-default-rtdb.europe-west1.firebasedatabase.app/"
 
     private var recordingBufferSize = 0
 
     private var audioRecord: AudioRecord? = null
     private var audioRecordingThread: Thread? = null
 
-    var isRecording: Boolean = false
+    override var isRecording: Boolean = false
     var recordingBuffer: DoubleArray = DoubleArray(RECORDING_LENGTH)
     var interpreter: Interpreter? = null
 
@@ -75,14 +79,16 @@ class AudioRecordingService : Service() {
     private var isBackground = true
 
     inner class RunServiceBinder : Binder() {
-        val service: AudioRecordingService
-            get() = this@AudioRecordingService
+        val service: AudioRecordingServiceWebRTC
+            get() = this@AudioRecordingServiceWebRTC
     }
 
     var serviceBinder = RunServiceBinder()
 
+    private var wordCount: Int = 0
+
     override fun onCreate() {
-        Log.d(TAG, "Creating service")
+        Log.d(TAG, "Creating service $TAG")
         super.onCreate()
 
         createNotificationChannel()
@@ -162,7 +168,7 @@ class AudioRecordingService : Service() {
         notificationManager.notify(NOTIFICATION_ID, notificationBuilder?.build())
     }
 
-    fun setCallback(callback: RecordingCallback) {
+    override fun setCallback(callback: RecordingCallback) {
         this.callback = callback
     }
 
@@ -188,20 +194,21 @@ class AudioRecordingService : Service() {
         }
     }
 
-    private fun startRecording() {
+    override fun startRecording() {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
             // Access denied
             return
         }
         isRecording = true
+        wordCount = 0
         // Launching a coroutine in the background
         CoroutineScope(Dispatchers.IO).launch {
             record()
         }
-}
+    }
 
     private fun record() {
-        android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_AUDIO)
+        Process.setThreadPriority(Process.THREAD_PRIORITY_AUDIO)
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
             // Access denied
             return
@@ -219,6 +226,13 @@ class AudioRecordingService : Service() {
         var totalSamplesRead: Int
         val tempRecordingBuffer = DoubleArray(SAMPLE_RATE - windowSize)
 
+        val vad = VadWebRTC(
+            sampleRate = SampleRate.SAMPLE_RATE_16K,
+            frameSize = FrameSize.FRAME_SIZE_320,
+            mode = Mode.VERY_AGGRESSIVE,
+            silenceDurationMs = 300,
+            speechDurationMs = 50
+        )
         while (isRecording) {
             if (!firstLoop) {
                 totalSamplesRead = SAMPLE_RATE - windowSize
@@ -231,6 +245,7 @@ class AudioRecordingService : Service() {
                 val remainingSamples = SAMPLE_RATE - totalSamplesRead
                 val samplesToRead = if (remainingSamples > recordingBufferSize) recordingBufferSize else remainingSamples
                 val audioBuffer = ShortArray(samplesToRead)
+                //val audioBuffer = ShortArray(FrameSize.FRAME_SIZE_512.value)
                 val read = audioRecord?.read(audioBuffer, 0, samplesToRead)
 
                 if (read != AudioRecord.ERROR_INVALID_OPERATION && read != AudioRecord.ERROR_BAD_VALUE) {
@@ -243,25 +258,40 @@ class AudioRecordingService : Service() {
 
 
             val rms = calculateRMS(recordingBuffer)
-            val dB = 20 * Math.log10(rms)
+            val dB = 20 * log10(rms)
 
             // Update the dB value in HomeFragment
             callback?.updateSoundIntensity(dB)
 
-            Log.d(TAG, dB.toString())
-            if (dB > -40) {
-                computeBuffer(recordingBuffer)
-                // extra sleep before recording the next window
-                Thread.sleep(20)
+            Log.d(TAG, "dBs: $dB.toString()")
+            if (dB > -45) {
+                val shortBuffer = ShortArray(recordingBuffer.size)
+                for (i in recordingBuffer.indices) {
+                    shortBuffer[i] = (recordingBuffer[i] * Short.MAX_VALUE).toInt().toShort()
+                }
+
+
+                val isSpeech = vad.isSpeech(shortBuffer)
+                Log.d(TAG, "isSpeech: $isSpeech")
+                if (isSpeech){
+                    Log.d(TAG, "Model predicted speech")
+                    computeBuffer(recordingBuffer)
+
+                }
+                else {
+                    Log.d(TAG, "Model did not predict speech")
+                    callback?.onDataClear()
+                }
+
             } else {
                 callback?.onDataClear()
                 // if the sound intensity is too low, stop recording for a while - if stop for longer period it doesn't hear the next word
                 audioRecord?.stop()
                 Thread.sleep(10)
                 audioRecord?.startRecording()
+
             }
 
-            // sleep between each window
             Thread.sleep(30)
 
             // Use a circular buffer to avoid frequent array copying - less power consumption
@@ -280,7 +310,7 @@ class AudioRecordingService : Service() {
         return Math.sqrt(sum / buffer.size)
     }
 
-    private fun writeToFirebase(topKData: ArrayList<Result>) {
+    override fun writeToFirebase(topKData: ArrayList<Result>) {
         val database = FirebaseDatabase.getInstance(firebaseUrl)
         val ref = database.getReference("topKResults")
         val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
@@ -288,7 +318,7 @@ class AudioRecordingService : Service() {
         topKData.forEach { result ->
             val dataToWrite = mapOf(
                 "label" to result.label,
-                "confidence" to String.format("%.3f", result.confidence).toDouble(),
+                "confidence" to String.format(Locale.US,"%.3f", result.confidence).toDouble(),
                 "timestamp" to dateFormat.format(Date())
             )
 
@@ -300,6 +330,25 @@ class AudioRecordingService : Service() {
                     Log.e("Firebase", "Failed to write top K data to Firebase", e)
                 }
         }
+    }
+
+    override fun writeWordCountToFirebase() {
+        val database = FirebaseDatabase.getInstance(firebaseUrl)
+        val ref = database.getReference("wordCount")
+        val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
+
+        val dataToWrite = mapOf(
+            "wordCount" to wordCount,
+            "timestamp" to dateFormat.format(Date())
+        )
+
+        ref.push().setValue(dataToWrite)
+            .addOnSuccessListener {
+                Log.d("Firebase", "Word count successfully written to Firebase")
+            }
+            .addOnFailureListener { e ->
+                Log.e("Firebase", "Failed to write word count to Firebase", e)
+            }
     }
 
 
@@ -361,15 +410,14 @@ class AudioRecordingService : Service() {
             for (label in labels) {
                 results.add(Result(label.key, label.value.toDouble()))
             }
-            Log.d(TAG, "Labels are: $labels")
             val result = labels.maxBy { it.value }.key
             val value = labels.maxBy { it.value }.value
             if (value!! > probabilityThreshold) {
-                Log.d(TAG, "Result: $result")
                 Log.d(TAG, "Result: ${labels.maxBy { it.value }}")
 
                 if (value > 0.5) {
                     //if the prediction is high, pause for some time, so no false further predictions will be made
+                    wordCount ++
                     updateData(results)
                     notification = createNotification()
                     updateNotification(result!!)
@@ -387,24 +435,26 @@ class AudioRecordingService : Service() {
         }
     }
 
-    fun foreground() {
+    override fun foreground() {
         notification = createNotification()
         startForeground(NOTIFICATION_ID, notification)
         isBackground = false
     }
 
-    fun background() {
+    override fun background() {
         isBackground = true
         stopForeground(STOP_FOREGROUND_DETACH)
     }
 
-    private fun stopRecording() {
+    override fun stopRecording() {
         isRecording = false
         callback?.updateSoundIntensity(0.0)
     }
 
     override fun onDestroy() {
         stopRecording()
+        writeWordCountToFirebase()
+        wordCount = 0
         super.onDestroy()
         Log.d(TAG, "Destroying service")
     }
